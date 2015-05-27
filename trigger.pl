@@ -44,6 +44,7 @@ Irssi::settings_add_str('trigger', 'trigger_module_autoload_path', 'trigger/auto
 Irssi::theme_register([ 'trigger_crap', '{hilight ' .
                         $IRSSI{'name'} . '}: $0']);
 
+my $CMD_SYNTAX = /^\w{1,20}$/;
 # === Built-in Modules ========================================================
 # === TODO: Pull core modules into a separate package.
 my %MODULES;
@@ -73,6 +74,7 @@ my $m_load = {
               run => sub
                          {
                              $_ = lc shift;
+                             return unless ($_ && $_ =~ $CMD_SYNTAX);
                              eval
                              {
                                  return load_module($_);
@@ -92,6 +94,7 @@ my $m_unload = {
                 run => sub
                            {
                                $_ = lc shift;
+                               return unless ($_ && $_ =~ $CMD_SYNTAX);
                                eval { return unload_module($_); } or do
                                {
                                    chomp $@;
@@ -107,6 +110,7 @@ my $m_reload = {
                 run => sub
                            {
                                $_ = lc shift;
+                               return if ($_ && $_ !=~ $CMD_SYNTAX);
                                if (!$_)
                                {
                                    # TODO: Reload all modules
@@ -127,6 +131,8 @@ my $m_help = {
               run => sub
                          {
                              $_ = lc shift;
+
+                             return if ($_ && $_ !=~ $CMD_SYNTAX);
                              unless ($_)
                              {
                                  my $reply = 'help <command> for details:';
@@ -136,6 +142,7 @@ my $m_help = {
                                  }
                                  return $reply;
                              }
+
                              return "$_: " . $MODULES{$_}{'help'} if (exists $MODULES{$_});
                              return "$_: module does not exist.";
                          },
@@ -253,11 +260,19 @@ sub trigger_dispatch
 sub handle_command
 {
     my ($cmd, $args, $nick, $target, $server, $witem) =  @{$_[0]};
-    return unless (exists $MODULES{lc $cmd}); # Ignore non-existing commands.
-    my $data = $MODULES{lc $cmd}{'run'}($args, \%MODULES, $nick, $target, $server);
-    trace("handle_command <$nick> $cmd($args) -> $target\n>> $data") if (Irssi::settings_get_bool('trigger_debug'));
-    $server->command("MSG $target $data") if ($target && $data);
-    trace($data, $witem) if ($target eq undef && $data); # TODO: Current window.
+    return unless (exists $MODULES{lc $cmd} && $cmd =~ $CMD_SYNTAX); # Ignore non-existing commands and invalid commands.
+    eval
+    {
+        my $data = $MODULES{lc $cmd}{'run'}($args, \%MODULES, $nick, $target, $server);
+        trace("handle_command <$nick> $cmd($args) -> $target\n>> $data") if (Irssi::settings_get_bool('trigger_debug'));
+        $server->command("MSG $target $data") if ($target && $data);
+        trace($data, $witem) if ($target eq undef && $data); # TODO: Current window.
+    }
+    or do
+    {
+        # TODO: Log failure.
+        return;
+    }
 }
 
 # === Output Helpers ==========================================================
