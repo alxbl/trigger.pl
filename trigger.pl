@@ -45,7 +45,6 @@ Irssi::theme_register([ 'trigger_crap', '{hilight ' .
                         $IRSSI{'name'} . '}: $0']);
 
 # === Built-in Modules ========================================================
-my %LOADED;
 my %MODULES;
 my $m_on = {
             run => sub
@@ -168,9 +167,9 @@ sub load_module
     eval
     {
         require $path;
-        $LOADED{$name} = 1;
         my $module = _();
         $MODULES{$name} = $module;
+        $module->{init}();
         return "Module `$name` loaded.";
     }
     or do
@@ -184,9 +183,10 @@ sub unload_module
 {
     my ($name) = @_;
     my $path = Irssi::settings_get_str('trigger_module_path') . $name . '.pm';
-    return "Module `$name` not loaded." unless (exists $INC{$path} && exists $LOADED{$name});
+    return "Module `$name` is not loaded." unless exists $INC{$path};
+    eval { $MODULES{$name}{'deinit'}(); } or do {}; # Continue even if deinit fails. TODO: Log.
+    delete $MODULES{$name};
     delete $INC{$path};
-    delete $LOADED{$name};
     return "Module `$name` unloaded.";
 }
 
