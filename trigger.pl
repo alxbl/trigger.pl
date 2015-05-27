@@ -32,7 +32,7 @@ $VERSION = "1.0"; # M.m.S
             name        => 'trigger.pl',
             authors     => 'Alexandre Beaulieu',
             contact     => 'alex@segfault.me',
-            url         => 'http://github.com/irssi/trigger.pl',
+            url         => 'http://github.com/alxbl/trigger.pl/',
             license     => 'MIT',
             description => 'Provides a bot-like trigger that allows modules to be loaded dynamically.'
          );
