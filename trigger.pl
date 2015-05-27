@@ -24,8 +24,6 @@ use strict;
 use Irssi;
 
 our ($VERSION, %IRSSI);
-my $SCRIPT_FOLDER = "~/.irssi/scripts/";
-
 # --- Settings ---
 $VERSION = "1.0"; # M.m.S
 %IRSSI = (
@@ -47,6 +45,7 @@ Irssi::theme_register([ 'trigger_crap', '{hilight ' .
                         $IRSSI{'name'} . '}: $0']);
 
 # === Built-in Modules ========================================================
+my %LOADED;
 my %MODULES;
 my $m_on = {
             run => sub
@@ -74,7 +73,11 @@ my $m_load = {
               run => sub
                          {
                              $_ = lc shift;
-                             return "$_: module is already loaded. Use reload to reload it." if (exists $INC{$_.'.pm'});
+                             eval { return load_module($_); } or do
+                             {
+                                 chomp $@;
+                                 return $@;
+                             }
                          },
               help    => 'Loads a module by name. Requires access.',
               version => $VERSION,
@@ -84,6 +87,12 @@ my $m_load = {
 my $m_unload = {
                 run => sub
                            {
+                               $_ = lc shift;
+                               eval { return unload_module($_); } or do
+                               {
+                                   chomp $@;
+                                   return $@;
+                               }
                            },
                 help    => 'Unloads the specified module. Requires access.',
                 version => $VERSION,
@@ -94,9 +103,11 @@ my $m_reload = {
                 run => sub
                            {
                                $_ = lc shift;
-                               return "$_: module does not exist." unless (exists $MODULES{$_});
-                               print "Reloading module ($_)" if (Irssi::settings_get_bool('trigger_debug'));
-                               # This is where we do the black magic module reloading hacks.
+                               eval { return reload_module($_); } or do
+                               {
+                                   chomp $@;
+                                   return $@;
+                               }
                            },
                 help    => 'Reloads the specified module. Requires access.',
                 version => $VERSION,
@@ -148,7 +159,44 @@ my $m_version = {
                 version => $m_version
            );
 # -----------------------------------------------------------------------------
+# === Module Management =======================================================
+sub load_module
+{
+    my ($name) = @_;
+    my $path = Irssi::settings_get_str('trigger_module_path') . $name . '.pm';
+    die "Module `$name` already loaded.\n" if (exists $INC{$path});
+    eval
+    {
+        require $path;
+        $LOADED{$name} = 1;
+        my $module = _();
+        $MODULES{$name} = $module;
+        return "Module `$name` loaded.";
+    }
+    or do
+    {
+        my $e = $@;
+        die "Module `$name` does not exist.\n";
+    }
+}
 
+sub unload_module
+{
+    my ($name) = @_;
+    my $path = Irssi::settings_get_str('trigger_module_path') . $name . '.pm';
+    return "Module `$name` not loaded." unless (exists $INC{$path} && exists $LOADED{$name});
+    delete $INC{$path};
+    delete $LOADED{$name};
+    return "Module `$name` unloaded.";
+}
+
+sub reload_module
+{
+    my ($name) = @_;
+    unload_module($name);
+    load_module($name);
+    return "Module `$name` reloaded.";
+}
 # === Internal Callbacks ======================================================
 # Called when a message is received.
 sub trigger_msg
@@ -207,5 +255,5 @@ sub handle_command
     my $data = $MODULES{lc $cmd}{'run'}($args);
     Irssi::printformat(MSGLEVEL_CRAP, 'trigger_crap', "handle_command <$nick> $cmd($args) -> $target\n>> $data") if (Irssi::settings_get_bool('trigger_debug'));
     $server->command("MSG $target $data") if ($target && $data);
-    # TODO: If the command is run via /trigger, print the output in the current window for convenience.
+    Irssi::printformat(MSGLEVEL_CRAP, 'trigger_crap', $data) if ($target eq undef && $data); # TODO: Current window.
 }
