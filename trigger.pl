@@ -27,10 +27,10 @@ our ($VERSION, %IRSSI);
 # --- Settings ---
 $VERSION = "1.0"; # M.m.S
 %IRSSI = (
-            name        => 'trigger.pl',
+            name        => 'Trigger',
             authors     => 'Alexandre Beaulieu',
             contact     => 'alex@segfault.me',
-            url         => 'http://github.com/alxbl/trigger.pl/',
+            url         => 'https://github.com/alxbl/trigger.pl/',
             license     => 'MIT',
             description => 'Provides a bot-like trigger that allows modules to be loaded dynamically.'
          );
@@ -38,13 +38,14 @@ Irssi::settings_add_bool('trigger', 'trigger_active', 0);
 Irssi::settings_add_bool('trigger', 'trigger_debug', 0);
 Irssi::settings_add_str('trigger', 'trigger_trigger', '%');
 Irssi::settings_add_str('trigger', 'trigger_active_channels', '');
-Irssi::settings_add_str('trigger', 'trigger_module_path', 'trigger/');
+Irssi::settings_add_str('trigger', 'trigger_module_path', 'modules/');
 Irssi::settings_add_str('trigger', 'trigger_module_autoload_path', 'trigger/autoload');
 
 Irssi::theme_register([ 'trigger_crap', '{hilight ' .
                         $IRSSI{'name'} . '}: $0']);
 
 # === Built-in Modules ========================================================
+# === TODO: Pull core modules into a separate package.
 my %MODULES;
 my $m_on = {
             run => sub
@@ -72,7 +73,11 @@ my $m_load = {
               run => sub
                          {
                              $_ = lc shift;
-                             eval { return load_module($_); } or do
+                             eval
+                             {
+                                 return load_module($_);
+                             }
+                             or do
                              {
                                  chomp $@;
                                  return $@;
@@ -102,6 +107,11 @@ my $m_reload = {
                 run => sub
                            {
                                $_ = lc shift;
+                               if (!$_)
+                               {
+                                   # TODO: Reload all modules
+                                   return;
+                               }
                                eval { return reload_module($_); } or do
                                {
                                    chomp $@;
@@ -184,7 +194,7 @@ sub unload_module
     my ($name) = @_;
     my $path = Irssi::settings_get_str('trigger_module_path') . $name . '.pm';
     return "Module `$name` is not loaded." unless exists $INC{$path};
-    eval { $MODULES{$name}{'deinit'}(); } or do {}; # Continue even if deinit fails. TODO: Log.
+    eval { $MODULES{$name}{'deinit'}() if exists $MODULES{$name} && exists $MODULES{$name}{'deinit'} } or do {}; # Continue even if deinit fails. TODO: Log.
     delete $MODULES{$name};
     delete $INC{$path};
     return "Module `$name` unloaded.";
@@ -199,17 +209,17 @@ sub reload_module
 }
 # === Internal Callbacks ======================================================
 # Called when a message is received.
-sub trigger_msg
+sub on_trigger_msg
 {
     my ($server, $msg, $nick, $addr, $target) = @_;
     return unless (Irssi::settings_get_bool('trigger_active')); # Trigger must be enabled.
     my @channels = split (/ /, Irssi::settings_get_str('trigger_active_channels'));
     return unless (grep {/$target/} @channels); # Must be in a query or active channel.
     my $trigger = Irssi::settings_get_str('trigger_trigger');
-    trigger_dispatch($1, $msg, $nick, ($target eq undef) ? $nick : $target, $server) if ($msg =~ s/^$trigger(\w*)\b ?//);
+    trigger_dispatch($1, $msg, $nick, ($target eq undef) ? $nick : $target, $server, undef) if ($msg =~ s/^$trigger(\w*)\b ?//);
 }
-Irssi::signal_add('message public', 'trigger_msg');
-Irssi::signal_add('message private', 'trigger_msg');
+Irssi::signal_add('message public', 'on_trigger_msg');
+Irssi::signal_add('message private', 'on_trigger_msg');
 
 # === Command hooks ===========================================================
 # Usage: /TRIGGER [command [arg1 [arg2 [...] ] ]
@@ -220,20 +230,12 @@ sub cmd_trigger
     unless (@args)
     {
         my $msg = 'currently' . (Irssi::settings_get_bool('trigger_active') ? '' : ' not') . ' enabled';
-        if ($witem)
-        {
-            my $window = $witem->window();
-            $window->printformat(MSGLEVEL_CLIENTCRAP, 'trigger_crap', $msg);
-        }
-        else
-        {
-            Irssi::printformat(MSGLEVEL_CLIENTCRAP, 'trigger_crap', $msg);
-        }
+        trace($msg, $witem);
         return;
     }
     $_ = lc shift @args;
     my $cmd_args = (@args) ? join ' ', @args : undef;
-    trigger_dispatch($_, $cmd_args, $server->{nick}, undef, $server);
+    trigger_dispatch($_, $cmd_args, $server->{nick}, undef, $server, $witem);
 }
 Irssi::command_bind('trigger', 'cmd_trigger');
 
@@ -241,19 +243,33 @@ Irssi::command_bind('trigger', 'cmd_trigger');
 # Dispatch a command to the proper command handler.
 sub trigger_dispatch
 {
-    my ($module, $args, $nick, $target, $server) = @_;
+    my ($module, $args, $nick, $target, $server, $witem) = @_;
     return unless (exists $MODULES{lc $module});
-    my @command = ($module, $args, $nick, $target, $server);
+    my @command = ($module, $args, $nick, $target, $server, $witem);
     Irssi::timeout_add_once(10, "handle_command", \@command);
 }
 
 # Executes a command
 sub handle_command
 {
-    my ($cmd, $args, $nick, $target, $server) =  @{$_[0]};
+    my ($cmd, $args, $nick, $target, $server, $witem) =  @{$_[0]};
     return unless (exists $MODULES{lc $cmd}); # Ignore non-existing commands.
-    my $data = $MODULES{lc $cmd}{'run'}($args);
-    Irssi::printformat(MSGLEVEL_CRAP, 'trigger_crap', "handle_command <$nick> $cmd($args) -> $target\n>> $data") if (Irssi::settings_get_bool('trigger_debug'));
+    my $data = $MODULES{lc $cmd}{'run'}($args, \%MODULES, $nick, $target, $server);
+    trace("handle_command <$nick> $cmd($args) -> $target\n>> $data") if (Irssi::settings_get_bool('trigger_debug'));
     $server->command("MSG $target $data") if ($target && $data);
-    Irssi::printformat(MSGLEVEL_CRAP, 'trigger_crap', $data) if ($target eq undef && $data); # TODO: Current window.
+    trace($data, $witem) if ($target eq undef && $data); # TODO: Current window.
+}
+
+# === Output Helpers ==========================================================
+sub trace
+{
+    my ($msg, $witem) = @_;
+    if ($witem)
+    {
+        $witem->window()->printformat(MSGLEVEL_CRAP, 'trigger_crap', $msg);
+    }
+    else
+    {
+        Irssi::printformat(MSGLEVEL_CRAP, 'trigger_crap', $msg);
+    }
 }

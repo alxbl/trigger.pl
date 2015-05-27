@@ -8,6 +8,7 @@ our $m =
     authors => 'alxbl',
     contact => 'alex@segfault.me',
     version => '0.1',
+    # depends => ['access'], # Not implemented yet.
     # --- Hooks ---
     init   => sub  # Called right after the module is loaded.
     {
@@ -17,7 +18,12 @@ our $m =
     },
     run    => sub  # Called when the command is typed in an active channel.
     {
-        my ($args, $nick, $target, $server) = @_;
+        # args - any text that followed the command.
+        # modules - a hash containing the list of loaded modules.
+        # $nick - the user who called the command.
+        # $target - the channel/query in which the command was called.
+        # $server - the Irssi::Server object.
+        my ($args, $modules, $nick, $target, $server) = @_;
         $times = ++$m{'state'}{'called'};
         return "This is an example module. Called $times time(s)."; # Anything returned will be printed to the caller.
     },
