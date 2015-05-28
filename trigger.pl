@@ -44,7 +44,7 @@ Irssi::settings_add_str('trigger', 'trigger_module_autoload_path', 'trigger/auto
 Irssi::theme_register([ 'trigger_crap', '{hilight ' .
                         $IRSSI{'name'} . '}: $0']);
 
-my $CMD_SYNTAX = /^\w{1,20}$/;
+my $CMD_SYNTAX = qr/^\w{1,20}$/;
 # === Built-in Modules ========================================================
 # === TODO: Pull core modules into a separate package.
 my %MODULES;
@@ -74,7 +74,7 @@ my $m_load = {
               run => sub
                          {
                              $_ = lc shift;
-                             return unless ($_ && $_ =~ $CMD_SYNTAX);
+                             return unless ($_ && $_ =~ /$CMD_SYNTAX/);
                              eval
                              {
                                  return load_module($_);
@@ -94,7 +94,7 @@ my $m_unload = {
                 run => sub
                            {
                                $_ = lc shift;
-                               return unless ($_ && $_ =~ $CMD_SYNTAX);
+                               return unless ($_ && $_ =~ /$CMD_SYNTAX/);
                                eval { return unload_module($_); } or do
                                {
                                    chomp $@;
@@ -110,7 +110,7 @@ my $m_reload = {
                 run => sub
                            {
                                $_ = lc shift;
-                               return if ($_ && $_ !=~ $CMD_SYNTAX);
+                               return if ($_ && $_ !=~ /$CMD_SYNTAX/);
                                if (!$_)
                                {
                                    # TODO: Reload all modules
@@ -241,8 +241,16 @@ sub cmd_trigger
         return;
     }
     $_ = lc shift @args;
+
+    # Handle -out switch.
+    my $target = undef;
+    if ($_ eq '-out')
+    {
+        $target = $witem ? $witem->{name} : undef;
+        $_ = lc shift @args;
+    }
     my $cmd_args = (@args) ? join ' ', @args : undef;
-    trigger_dispatch($_, $cmd_args, $server->{nick}, undef, $server, $witem);
+    trigger_dispatch($_, $cmd_args, $server->{nick}, $target, $server, $witem);
 }
 Irssi::command_bind('trigger', 'cmd_trigger');
 
@@ -260,17 +268,22 @@ sub trigger_dispatch
 sub handle_command
 {
     my ($cmd, $args, $nick, $target, $server, $witem) =  @{$_[0]};
-    return unless (exists $MODULES{lc $cmd} && $cmd =~ $CMD_SYNTAX); # Ignore non-existing commands and invalid commands.
+    return unless (exists $MODULES{lc $cmd} && ("$cmd" =~ /$CMD_SYNTAX/)); # Ignore non-existing commands and invalid commands.
     eval
     {
         my $data = $MODULES{lc $cmd}{'run'}($args, \%MODULES, $nick, $target, $server);
         trace("handle_command <$nick> $cmd($args) -> $target\n>> $data") if (Irssi::settings_get_bool('trigger_debug'));
-        $server->command("MSG $target $data") if ($target && $data);
-        trace($data, $witem) if ($target eq undef && $data); # TODO: Current window.
+        if ($target && $data)
+        {
+            $witem ? $server->command("MSG $target >> $cmd($args) => $data") # $target && $witem => /trigger -out
+                : $server->command("MSG $target $data"); # Otherwise, luser command.
+        }
+        trace($data, $witem) if ($target eq undef && $data);
     }
     or do
     {
-        # TODO: Log failure.
+        my $ex = $@;
+        trace("Error while running `$cmd($args)`: $ex", $witem);
         return;
     }
 }
