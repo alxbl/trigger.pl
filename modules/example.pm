@@ -19,11 +19,10 @@ our $m =
     run    => sub  # Called when the command is typed in an active channel.
     {
         # args - any text that followed the command.
-        # modules - a hash containing the list of loaded modules.
         # $nick - the user who called the command.
         # $target - the channel/query in which the command was called.
         # $server - the Irssi::Server object.
-        my ($args, $modules, $nick, $target, $server) = @_;
+        my ($args, $nick, $target, $server) = @_;
         $times = ++$m{'state'}{'called'};
         return "This is an example module. Called $times time(s)."; # Anything returned will be printed to the caller.
     },
