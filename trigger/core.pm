@@ -64,131 +64,138 @@ sub reload_module
 
 # === Core modules ========================================================
 my $m_on = {
-            run => sub
-                       {
-                           Irssi::settings_set_bool('trigger_active', 1);
-                           return 'Enabled Trigger';
-                       },
-            help    => 'Enables the trigger mechanism. Requires access.',
-            version => $VERSION,
-            core    => 1,
-            access  => 100
-           };
+    name => 'on',
+    run => sub
+    {
+        Irssi::settings_set_bool('trigger_active', 1);
+        return 'Enabled Trigger';
+    },
+    help    => 'Enables the trigger mechanism. Requires access.',
+    version => $VERSION,
+    core    => 1,
+    access  => 100
+};
 my $m_off = {
-             run => sub
-                        {
-                            #Irssi::settings_set_bool('trigger_active', 0);
-                            return 'off => I can\'t let you do that (Orez|Mithorium)';
-                        },
-             help    => 'Disables the trigger mechanism. Requires access.',
-             version => $VERSION,
-             core    => 1,
-             access  => 100
-            };
+    name => 'off',
+    run => sub
+    {
+        #Irssi::settings_set_bool('trigger_active', 0);
+        return 'off => I can\'t let you do that (Orez|Mithorium)';
+    },
+    help    => 'Disables the trigger mechanism. Requires access.',
+    version => $VERSION,
+    core    => 1,
+    access  => 100
+};
 my $m_load = {
-              run => sub
-                         {
-                             $_ = lc shift;
-                             return unless ($_ && $_ =~ /$CMD_SYNTAX/);
-                             eval
-                             {
-                                 return load_module($_);
-                             }
-                             or do
-                             {
-                                 chomp $@;
-                                 return $@;
-                             }
-                         },
-              help    => 'Loads a module by name. Requires access.',
-              version => $VERSION,
-              core    => 1,
-              access  => 100
-            };
+    name => 'load',
+    run => sub
+    {
+        $_ = lc shift;
+        return unless ($_ && $_ =~ /$CMD_SYNTAX/);
+        eval
+        {
+            return load_module($_);
+        }
+        or do
+        {
+            chomp $@;
+            return $@;
+        }
+    },
+    help    => 'Loads a module by name. Requires access.',
+    version => $VERSION,
+    core    => 1,
+    access  => 100
+};
 my $m_unload = {
-                run => sub
-                           {
-                               $_ = lc shift;
-                               return unless ($_ && $_ =~ /$CMD_SYNTAX/);
-                               eval { return unload_module($_); } or do
-                               {
-                                   chomp $@;
-                                   return $@;
-                               }
-                           },
-                help    => 'Unloads the specified module. Requires access.',
-                version => $VERSION,
-                core    => 1,
-                access  => 100
-               };
+    name => 'unload',
+    run => sub
+    {
+        $_ = lc shift;
+        return unless ($_ && $_ =~ /$CMD_SYNTAX/);
+        eval { return unload_module($_); } or do
+        {
+            chomp $@;
+            return $@;
+        }
+    },
+    help    => 'Unloads the specified module. Requires access.',
+    version => $VERSION,
+    core    => 1,
+    access  => 100
+};
 my $m_reload = {
-                run => sub
-                           {
-                               $_ = lc shift;
-                               return if ($_ && $_ !=~ /$CMD_SYNTAX/);
-                               if (!$_)
-                               {
-                                   # TODO: Reload all modules
-                                   return;
-                               }
-                               eval { return reload_module($_); } or do
-                               {
-                                   chomp $@;
-                                   return $@;
-                               }
-                           },
-                help    => 'Reloads the specified module. Requires access.',
-                version => $VERSION,
-                core    => 1,
-                access  => 100
-               };
+    name => 'reload',
+    run => sub
+    {
+        $_ = lc shift;
+        return if ($_ && $_ !=~ /$CMD_SYNTAX/);
+        if (!$_)
+        {
+            # TODO: Reload all modules
+            return;
+        }
+        eval { return reload_module($_); } or do
+        {
+            chomp $@;
+            return $@;
+        }
+    },
+    help    => 'Reloads the specified module. Requires access.',
+    version => $VERSION,
+    core    => 1,
+    access  => 100
+};
 my $m_help = {
-              run => sub
-                         {
-                             $_ = lc shift;
+    name => 'help',
+    run => sub
+    {
+        $_ = lc shift;
 
-                             return if ($_ && $_ !=~ $CMD_SYNTAX);
-                             unless ($_)
-                             {
-                                 my $reply = 'help <command> for details:';
-                                 foreach my $k (keys %MODULES)
-                                 {
-                                     $reply = $reply . " $k";
-                                 }
-                                 return $reply;
-                             }
+        return if ($_ && $_ !=~ $CMD_SYNTAX);
+        unless ($_)
+        {
+            my $reply = 'help <command> for details:';
+            foreach my $k (keys %MODULES)
+            {
+                $reply = $reply . " $k";
+            }
+            return $reply;
+        }
 
-                             return "$_: " . $MODULES{$_}{'help'} if (exists $MODULES{$_});
-                             return "$_: module does not exist.";
-                         },
-              help    => 'Displays help messages for various commands.',
-              version => $VERSION,
-              core    => 1,
-              access  => 0
-             };
+        return "$_: " . $MODULES{$_}{'help'} if (exists $MODULES{$_});
+        return "$_: module does not exist.";
+    },
+    help    => 'Displays help messages for various commands.',
+    version => $VERSION,
+    core    => 1,
+    access  => 0
+};
 my $m_version = {
-                 run => sub
-                            {
-                                $_ = lc shift;
-                                return "trigger.pl: version $VERSION" unless ($_);
-                                return "$_: module does not exist." unless (exists $MODULES{$_});
-                                return "$_: version " . $MODULES{$_}{'version'};
-                            },
-                 help    => 'Returns the version number of a given module.',
-                 version => $VERSION,
-                 core    => 1,
-                 access  => 0
-                };
+    name => 'version',
+    run => sub
+    {
+        $_ = lc shift;
+        return "trigger.pl: version $VERSION" unless ($_);
+        return "$_: module does not exist." unless (exists $MODULES{$_});
+        return "$_: version " . $MODULES{$_}{'version'};
+    },
+    help    => 'Returns the version number of a given module.',
+    version => $VERSION,
+    core    => 1,
+    access  => 0
+};
 # -----------------------------------------------------------------------------
-%MODULES = (    # Just manually load the core.
-                on      => $m_on,
-                off     => $m_off,
-                load    => $m_load,
-                unload  => $m_unload,
-                reload  => $m_reload,
-                help    => $m_help,
-                version => $m_version
-    );
+%MODULES = (
+    on      => $m_on,
+    off     => $m_off,
+    load    => $m_load,
+    unload  => $m_unload,
+    reload  => $m_reload,
+    help    => $m_help,
+    version => $m_version
+);
 # TODO: DRY this up.
 %CORE_MODULES = (on => 1, off => 1, load => 1, unload => 1, reload => 1, help => 1, version => 1);
 
