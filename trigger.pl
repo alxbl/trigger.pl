@@ -44,11 +44,20 @@ Irssi::settings_add_str('trigger', 'trigger_module_autoload_path', 'trigger/auto
 Irssi::theme_register([ 'trigger_crap', '{hilight ' .
                         $IRSSI{'name'} . '}: $0']);
 
-my $core = 'trigger/core.pm';
-delete $INC{$core} if exists $INC{$core};
-require $core;
 
-core::init();
+# The irssi environment appears to share a common %INC that does not get reloaded
+# along with the script. This subroutine ensures that core modules are forcefully
+# reloaded along with the script.
+sub reload_require
+{
+    my ($module) = @_;
+    delete $INC{$module} if exists $INC{$module};
+    require $module;
+}
+
+
+reload_require('trigger/core.pm');
+reload_require('trigger/access.pm');
 
 # === Internal Callbacks ======================================================
 # Called when a message is received.
