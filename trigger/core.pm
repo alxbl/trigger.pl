@@ -5,7 +5,7 @@ use Irssi;
 
 our $VERSION;
 
-my $CMD_SYNTAX = qr/^\w{1,20}$/;
+our $CMD_SYNTAX = qr/^\w{1,20}$/;
 my %MODULES; # Keep track of loaded modules.
 my %CORE_MODULES; # Disallow unload/reload of core modules.
 
@@ -153,7 +153,7 @@ my $m_help = {
     {
         $_ = lc shift;
 
-        return if ($_ && $_ !=~ $CMD_SYNTAX);
+        return if ($_ && $_ !~ /$CMD_SYNTAX/);
         unless ($_)
         {
             my $reply = 'help <command> for details:';

@@ -66,7 +66,11 @@ sub on_trigger_msg
     my ($server, $msg, $nick, $addr, $target) = @_;
     return unless (Irssi::settings_get_bool('trigger_active')); # Trigger must be enabled.
     my @channels = split (/ /, Irssi::settings_get_str('trigger_active_channels'));
-    return unless (grep {/$target/} @channels); # Must be in a query or active channel.
+    unless (grep {/$target/} @channels) # Must be in a query or active channel.
+    {
+        #trace("Inactive Channel: $target");
+        return;
+    }
     my $trigger = Irssi::settings_get_str('trigger_trigger');
     trigger_dispatch($1, $msg, $nick, ($target eq undef) ? $nick : $target, $server, undef) if ($msg =~ s/^$trigger(\w*)\b ?//);
 }
@@ -105,7 +109,11 @@ sub trigger_dispatch
 {
     my ($cmd, $args, $nick, $target, $server, $witem) = @_;
     my $module = core::module($cmd);
-    return unless $module && $cmd =~ /$core::CMD_SYNTAX/; # Don't dispatch invalid commands.
+    unless ($module && $cmd =~ /$core::CMD_SYNTAX/) # Don't dispatch invalid commands.
+    {
+        trace("Command not found: Module=$module, Command=$cmd Syntax=$core::CMD_SYNTAX");
+        return;
+    }
     my @command = ($module, $args, $nick, $target, $server, $witem);
     Irssi::timeout_add_once(10, "handle_command", \@command);
 }
